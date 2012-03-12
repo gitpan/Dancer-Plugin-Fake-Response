@@ -13,11 +13,11 @@ Dancer::Plugin::Fake::Response - The great new Dancer::Plugin::Fake::Response!
 
 =head1 VERSION
 
-Version 0.0101
+Version 0.03
 
 =cut
 
-our $VERSION = '0.0101';
+our $VERSION = '0.03';
 
 
 =head1 SYNOPSIS
@@ -37,7 +37,7 @@ In your config file :
         GET:
           "/rewrite_fake_route/:id.:format":
             response:
-              id: 1
+              id: ":id"
               test: "get test"
           "/rewrite_fake_route2/:id.:format":
             response:
@@ -46,7 +46,7 @@ In your config file :
         PUT:
           "/rewrite_fake_route/:id.:format":
             response:
-              id: 3
+              id: ":id"
               test: "put test"
         POST:
           "/rewrite_fake_route/:format":
@@ -56,14 +56,16 @@ In your config file :
         DELETE:
           "/rewrite_fake_route/:id.:format":
             response:
-              id: 5
+              id: ":id"
               test: "delete test"
 
 For each defined route in Dancer plugin config are catched and return data and code configured.
 
-For example for : GET http://localhost/rewrite_fake_route/1.json
-return code : 123
-return body : {"id":1,"test":"get test"}
+For example for : GET http://localhost/rewrite_fake_route/12.json
+return code : 200
+return body : {"id":12,"test":"get test"}
+
+In configuation, if you put parameter name with ':' before, it will return value of parameter send.
 
 new step :
 * add possibility to return params set like id : :id
@@ -114,7 +116,7 @@ Codes return are :
 
 use Data::Dumper;
 register 'catch_fake_exception' => sub {
-    before sub {
+    hook before => sub {
         my $req = request;
         my %req_params = params;
         return if !defined plugin_setting->{$req->method()};
@@ -124,6 +126,18 @@ register 'catch_fake_exception' => sub {
           {
             set serializer => uc($req_params{format}) || 'JSON';
             my $response = plugin_setting->{$req->method()}->{$route}->{response};
+            foreach my $key (keys %{$response})
+            {
+                if ( $response->{$key} =~ m/^:[A-Za-z\_\-]+/)
+                {
+                    my $param_name = $response->{$key};
+                    $param_name =~ s/^://;
+                    if (defined params->{$param_name})
+                    {
+                        $response->{$key} = params->{$param_name};
+                    }
+                }
+            }
             return halt(status_ok($response)) if $req->method() eq 'GET'; #code = 200
             return halt(status_created($response)) if $req->method() eq 'POST'; #code = 201
             return halt(status_accepted($response)) if $req->method() eq 'PUT'; #code = 202
